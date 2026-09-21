@@ -25,3 +25,5 @@ slug：`YYYY-MM-DD-<主题短名>`。
 | 2026-09-21 | 账号登录 API | 2026-09-21-account-login | full |
 
 默认 resume/status **只扫 active/**。
+
+- 2026-09-21-logout-change-password — 已归档（登出+改密）

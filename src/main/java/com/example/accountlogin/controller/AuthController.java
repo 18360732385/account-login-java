@@ -1,8 +1,10 @@
 package com.example.accountlogin.controller;
 
+import com.example.accountlogin.dto.ChangePasswordRequest;
 import com.example.accountlogin.dto.LoginRequest;
 import com.example.accountlogin.dto.LoginResponse;
 import com.example.accountlogin.dto.MeResponse;
+import com.example.accountlogin.dto.MessageResponse;
 import com.example.accountlogin.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -30,5 +32,25 @@ public class AuthController {
     @GetMapping("/me")
     public MeResponse me(Authentication authentication) {
         return authService.me(authentication.getName());
+    }
+
+    @PostMapping("/auth/logout")
+    public MessageResponse logout(Authentication authentication) {
+        String rawToken = credentialsAsToken(authentication);
+        return authService.logout(rawToken);
+    }
+
+    @PostMapping("/auth/change-password")
+    public MessageResponse changePassword(
+            Authentication authentication,
+            @Valid @RequestBody ChangePasswordRequest request
+    ) {
+        String rawToken = credentialsAsToken(authentication);
+        return authService.changePassword(authentication.getName(), rawToken, request);
+    }
+
+    private static String credentialsAsToken(Authentication authentication) {
+        Object credentials = authentication.getCredentials();
+        return credentials != null ? credentials.toString() : null;
     }
 }

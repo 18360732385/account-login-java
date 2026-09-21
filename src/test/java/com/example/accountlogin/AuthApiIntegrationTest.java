@@ -1,7 +1,9 @@
 package com.example.accountlogin;
 
+import com.example.accountlogin.service.DemoUserStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -12,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,6 +28,16 @@ class AuthApiIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private DemoUserStore userStore;
+
+    @AfterEach
+    void restoreDemoCredentials() {
+        // 改密测试会污染共享演示账号；恢复以免跨用例/跨仓联调漂移（O15）
+        userStore.resetCredentials("demo", "demo123");
+        userStore.resetCredentials("admin", "admin123");
+    }
 
     @Test
     void loginSucceedsWithValidCredentials() throws Exception {
@@ -59,22 +72,116 @@ class AuthApiIntegrationTest {
 
     @Test
     void meReturnsProfileWithValidToken() throws Exception {
-        MvcResult login = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"username":"admin","password":"admin123"}
-                                """))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        JsonNode body = objectMapper.readTree(login.getResponse().getContentAsString());
-        String token = body.get("accessToken").asText();
-        assertThat(token).isNotBlank();
+        String token = loginToken("admin", "admin123");
 
         mockMvc.perform(get("/api/me")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("admin"))
                 .andExpect(jsonPath("$.displayName").value("管理员"));
+    }
+
+    @Test
+    void logoutInvalidatesCurrentToken() throws Exception {
+        String token = loginToken("demo", "demo123");
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("已登出"));
+
+        mockMvc.perform(get("/api/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutRequiresBearer() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void changePasswordSuccessThenOldTokenFailsAndNewPasswordWorks() throws Exception {
+        String token = loginToken("demo", "demo123");
+
+        mockMvc.perform(post("/api/auth/change-password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"oldPassword":"demo123","newPassword":"demo456"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("密码已修改，请重新登录"));
+
+        mockMvc.perform(get("/api/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"demo","password":"demo123"}
+                                """))
+                .andExpect(status().isUnauthorized());
+
+        String newToken = loginToken("demo", "demo456");
+        mockMvc.perform(get("/api/me")
+                        .header("Authorization", "Bearer " + newToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("demo"));
+    }
+
+    @Test
+    void changePasswordFailsWithWrongOldPassword() throws Exception {
+        String token = loginToken("admin", "admin123");
+
+        mockMvc.perform(post("/api/auth/change-password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"oldPassword":"wrong","newPassword":"admin999"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("旧密码不正确"));
+
+        // 旧 token 仍可用
+        mockMvc.perform(get("/api/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void changePasswordRequiresAuth() throws Exception {
+        mockMvc.perform(post("/api/auth/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"oldPassword":"demo123","newPassword":"demo456"}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void corsPreflightAllowsViteOrigin() throws Exception {
+        mockMvc.perform(options("/api/auth/login")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk());
+    }
+
+    private String loginToken(String username, String password) throws Exception {
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"%s","password":"%s"}
+                                """.formatted(username, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(login.getResponse().getContentAsString());
+        String token = body.get("accessToken").asText();
+        assertThat(token).isNotBlank();
+        return token;
     }
 }

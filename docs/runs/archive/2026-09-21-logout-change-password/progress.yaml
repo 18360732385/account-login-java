@@ -1,0 +1,82 @@
+# feature-eng 进度 — 登出+改密 API
+slug: "2026-09-21-logout-change-password"
+title: "登出 + 改密 API"
+created_at: "2026-09-21"
+updated_at: "2026-09-21T19:58:40+08:00"
+
+path: full
+run_mode: guided
+invoke: strict
+handoff_policy: confirm
+review_policy: inline
+
+stage: done
+
+domain: skipped
+proto: skipped
+
+chef_mode: controller_proxy
+harness_land: false
+
+sibling_repos:
+  - url: "https://github.com/18360732385/account-login-web"
+    role: web
+    spec_path: "docs/superpowers/archive/specs/2026-09-21-logout-change-password-设计.md"
+
+artifacts:
+  adr: []
+  spec: "docs/superpowers/archive/specs/2026-09-21-logout-change-password-设计.md"
+  plan: "docs/superpowers/archive/plans/2026-09-21-logout-change-password-实施计划.md"
+  proto: null
+  context_delta: null
+  testcases: "docs/runs/archive/2026-09-21-logout-change-password/测试用例.md"
+  test_report: "docs/runs/archive/2026-09-21-logout-change-password/测试报告.md"
+  qa_report: null
+
+tasks:
+  - id: T1
+    title: "TokenDenylist + JwtService jti/tv"
+    depends_on: []
+    status: done
+  - id: T2
+    title: "DemoUser tokenVersion + 改密存储"
+    depends_on: [T1]
+    status: done
+  - id: T3
+    title: "logout/change-password API"
+    depends_on: [T2]
+    status: done
+  - id: T4
+    title: "CorsConfigurationSource"
+    depends_on: []
+    status: done
+  - id: T5
+    title: "集成测试 + README"
+    depends_on: [T3, T4]
+    status: done
+  - id: T6
+    title: "feature-eng 收口与优化点"
+    depends_on: [T5]
+    status: done
+
+gates:
+  triage: "2026-09-21T19:56:00+08:00"
+  shared_understanding: "2026-09-21T19:56:10+08:00"
+  design_confirmed: "2026-09-21T19:56:20+08:00"
+  go: "2026-09-21T19:56:30+08:00"
+  pre_impl: "2026-09-21T19:56:40+08:00"
+  gate: "2026-09-21T19:57:00+08:00"
+  verify: "2026-09-21T19:57:50+08:00"
+  close: "2026-09-21T19:59:00+08:00"
+
+env_verified: verified
+env_notes:
+  runtime_jdk: "OpenJDK 21.0.12.1"
+  target_java: "17"
+  maven: "3.9.9"
+  pinned_deps: []
+  api_base_mode: "n/a-backend"
+  integration_ready: "cors|proxy"
+  note: "本仓提供 CorsConfigurationSource；sibling web 仍可走 Vite proxy。"
+accepted_residual: null
+close_pitfalls: optional
